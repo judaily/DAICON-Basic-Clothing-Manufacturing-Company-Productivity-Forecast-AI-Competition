@@ -1,0 +1,56 @@
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import BayesianRidge, HuberRegressor, Ridge, OrthogonalMatchingPursuit
+from sklearn.ensemble import GradientBoostingRegressor
+import lightgbm
+from lightgbm import LGBMRegressor 
+from sklearn.model_selection import KFold, cross_val_score
+from sklearn.preprocessing import StandardScaler
+
+df = pd.read_csv('train.csv')
+df = pd.get_dummies(df,columns=["quarter","department","day"],drop_first=True)
+
+
+X = df.drop(columns=["ID","actual_productivity"])
+y = df["actual_productivity"]
+print(X.shape)
+scaler = StandardScaler()
+#scaler.fit(X)
+#X = scaler.transform(X)
+
+max_depth = [5]
+num_leaves = [16]
+learning_rate = [0.01,0.02,0.005]
+n_estimators = [400]
+
+lgbm_paramlist = []
+
+for md in max_depth:
+    for nl in num_leaves:
+        for lr in learning_rate:
+            for ne in n_estimators:
+                lgbm_paramlist.append({
+    'num_leaves': nl,
+    'max_depth': md,
+    'learning_rate': lr,
+    'n_estimators': ne})
+
+def to_str(param):
+    ret = ''
+    for name, val in param.items():
+        ret += name+"_"+str(val)+" "
+    return ret
+
+models = {to_str(lp):LGBMRegressor(**lp) for lp in lgbm_paramlist}
+score = []
+
+kf = KFold(n_splits=10)
+for name, model in models.items():
+    model.fit(X, y)
+    result = np.sqrt(-cross_val_score(model, X, y, scoring='neg_mean_squared_error', cv=kf))
+    score.append((np.mean(result),name))
+    print(name, np.mean(result))
+
+score.sort()
+for i in range(20):
+    print(score[i])
